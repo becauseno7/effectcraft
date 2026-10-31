@@ -110,6 +110,22 @@ fn an_encrypt_entry_past_the_trailer_window_is_refused() {
 }
 
 #[test]
+fn an_escaped_encrypt_entry_past_the_trailer_window_is_refused() {
+    // A name may write any byte as `#` and two hex digits, so these keys all read as /Encrypt and
+    // the past-the-window fallback refuses them. The decoys decode to other names and still open.
+    let plain = String::from_utf8(document("", &[])).unwrap();
+    let doc = parse(plain.as_bytes()).unwrap();
+    let filler = "x".repeat(8 * 1024);
+    let trailer = |key: &str| plain.replace("/Root 1 0 R >>", &format!("/Root 1 0 R /Filler ({filler}) {key} 9 0 R >>"));
+    for key in ["/Encr#79pt", "/#45#6E#63rypt", "/E#6e#63rypt"] {
+        assert_eq!(parse(trailer(key).as_bytes()), Err(Error::Encrypted), "{key}");
+    }
+    for decoy in ["/Encrypted", "/Encr#7Apt"] {
+        assert_eq!(parse(trailer(decoy).as_bytes()).as_ref(), Ok(&doc), "{decoy}");
+    }
+}
+
+#[test]
 fn an_encrypt_entry_after_a_window_cut_before_the_trailer_dictionary_is_refused() {
     // The 4 KiB pre-scan window ends in the whitespace before the trailer dictionary (the lexer
     // returns nothing) or between the two `<` of its `<<` (the lexer reads a hex string).
